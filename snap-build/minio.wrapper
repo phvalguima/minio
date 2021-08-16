@@ -1,0 +1,3 @@
+#!/bin/bash
+
+${SNAP}/bin/minio server $MINIO_OPTS $MINIO_VOLUMES

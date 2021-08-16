@@ -1,0 +1,76 @@
+name: minio
+version: RELEASE.2021-07-15T22-27-34Z
+summary: Minio in a snap
+description: |
+  Get the S3 API with Minio in a snap. Minio is an open-source
+  server that can work either as standalone or distributed S3
+  servers.
+
+  Minio snap will use folders present in /var/snap/minio/common
+  as its data stores. 
+
+  Steps to use install and start minio:
+  $ sudo snap install minio
+  $ sudo snap connect minio:proc-mounts
+  $ sudo snap connect minio:mount-observer
+
+  In a simple setup, one can create a single folder and pass the
+  local folder only. Otherwise, to run Minio in a distributed
+  mode, it will need at least 4 folders, independent on node count.
+
+  Create as many folders as you prefer:
+  $ sudo mkdir /var/snap/minio/common/data1
+  $ sudo mkdir /var/snap/minio/common/data2
+  $ sudo mkdir /var/snap/minio/common/data3
+  $ sudo mkdir /var/snap/minio/common/data4
+
+  Set the environment variables in override.conf:
+  $ sudo cat /etc/systemd/system/snap.minio.minio.service.d/override.conf << EOF
+    [Service]
+    Environment=MINIO_VOLUMES="http://<IP>/var/snap/minio/common/data1 http://<IP>/var/snap/minio/common/data2 http://<IP>/var/snap/minio/common/data3 http://<IP>/var/snap/minio/common/data4"
+    EOF
+
+  Add any other settings as preferred. Restart the service:
+  $ sudo snap restart minio
+
+  Minio is ready to use in your machine.
+
+confinement: strict
+grade: stable
+base: core20
+architectures: [amd64]
+assumes: [snapd2.51]
+
+parts:
+  minio:
+    plugin: go
+    source: https://github.com/phvalguima/minio
+    source-tag: RELEASE.2021-07-15T22-27-34Z
+    source-type: git
+    go-channel: 1.16/stable
+    override-build: |
+      # Needed to build minio
+      export GO111MODULE=on
+      snapcraftctl build
+      apt update
+      apt install -y wget
+      wget https://raw.githubusercontent.com/phvalguima/minio/master/snap-build/minio.wrapper -O /root/parts/minio/install/bin/minio.wrapper
+      chmod +x /root/parts/minio/install/bin/minio.wrapper
+plugs:
+  proc-mounts:
+    interface: system-files
+    read:
+    - /proc/mounts
+    - /proc/self/mounts
+apps:
+  minio:
+    command: bin/minio.wrapper
+    daemon: simple
+    plugs:
+      - network-bind
+      - network
+      # CreateEndpoint logic reads directly from /proc/mounts
+      # https://github.com/minio/minio/blob/1f262daf6fe369a57d8e183b3e3758644407e485/internal/mountinfo/mountinfo_linux.go#L118
+      # https://github.com/minio/minio/blob/1f262daf6fe369a57d8e183b3e3758644407e485/cmd/endpoint.go#L636
+      - proc-mounts
+      - mount-observe
